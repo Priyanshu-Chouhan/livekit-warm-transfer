@@ -18,14 +18,19 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
-        {/* Header */}
+        {/* Google Meet Style Header */}
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            LiveKit Warm Transfer
-          </h1>
-          <p className="text-xl text-gray-600 mb-8">
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mr-4">
+              <span className="text-white font-bold text-2xl">LT</span>
+            </div>
+            <h1 className="text-4xl font-bold text-gray-900">
+              LiveKit Warm Transfer
+            </h1>
+          </div>
+          <p className="text-lg text-gray-600 mb-8">
             Seamless call transfers with AI-powered context sharing
           </p>
         </div>
@@ -54,28 +59,30 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-center mb-6">Join a Call</h2>
           
           <div className="space-y-6">
-            {/* Participant Type Selection */}
+            {/* Google Meet Style Participant Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                I am a:
+              <label className="block text-sm font-medium text-gray-700 mb-4">
+                Choose your role:
               </label>
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { type: 'caller', label: 'Caller', icon: '📞', desc: 'Customer calling in' },
-                  { type: 'agent_a', label: 'Agent A', icon: '👨‍💼', desc: 'Initial agent' },
-                  { type: 'agent_b', label: 'Agent B', icon: '👩‍💼', desc: 'Receiving agent' }
-                ].map(({ type, label, icon, desc }) => (
+                  { type: 'caller', label: 'Caller', icon: '📞', desc: 'Customer calling in', color: 'from-red-500 to-pink-500' },
+                  { type: 'agent_a', label: 'Agent A', icon: '👨‍💼', desc: 'Initial agent', color: 'from-blue-500 to-indigo-500' },
+                  { type: 'agent_b', label: 'Agent B', icon: '👩‍💼', desc: 'Receiving agent', color: 'from-green-500 to-emerald-500' }
+                ].map(({ type, label, icon, desc, color }) => (
                   <button
                     key={type}
                     onClick={() => setParticipantType(type as any)}
-                    className={`p-4 rounded-lg border-2 transition-all ${
+                    className={`p-6 rounded-xl border-2 transition-all duration-200 ${
                       participantType === type
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50 shadow-lg transform scale-105'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-2xl mb-2">{icon}</div>
-                    <div className="font-medium">{label}</div>
+                    <div className={`w-16 h-16 bg-gradient-to-br ${color} rounded-full flex items-center justify-center mx-auto mb-3`}>
+                      <span className="text-2xl">{icon}</span>
+                    </div>
+                    <div className="font-semibold text-gray-900 mb-1">{label}</div>
                     <div className="text-sm text-gray-500">{desc}</div>
                   </button>
                 ))}
@@ -96,13 +103,15 @@ export default function Home() {
               />
             </div>
 
-            {/* Join Button */}
+            {/* Google Meet Style Join Button */}
             <button
               onClick={handleJoinRoom}
-              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold hover:bg-blue-700 transition-all duration-200 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
             >
-              <Users className="w-5 h-5" />
-              Join Room
+              <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+              Join Meeting
             </button>
           </div>
         </div>
