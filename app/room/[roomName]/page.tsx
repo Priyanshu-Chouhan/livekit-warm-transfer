@@ -37,25 +37,32 @@ function RemoteVideoTrack({ participant }: { participant: RemoteParticipant }) {
   useEffect(() => {
     if (!participant || !videoRef.current) return
 
-    const videoTrack = participant.videoTrackPublications.values().next().value?.track
+    // Get the first video track
+    const videoTrackPublication = Array.from(participant.videoTrackPublications.values())[0]
+    const videoTrack = videoTrackPublication?.track
 
     if (videoTrack && videoRef.current) {
+      console.log(`Attaching video track for ${participant.identity}`)
       videoTrack.attach(videoRef.current)
     }
 
     return () => {
       if (videoTrack && videoRef.current) {
+        console.log(`Detaching video track for ${participant.identity}`)
         videoTrack.detach(videoRef.current)
       }
     }
-  }, [participant])
+  }, [participant, participant.videoTrackPublications])
 
   return (
     <video
       ref={videoRef}
       autoPlay
       playsInline
+      muted={false}
       className="w-full h-full object-cover"
+      onLoadedData={() => console.log(`Video loaded for ${participant.identity}`)}
+      onError={(e) => console.error(`Video error for ${participant.identity}:`, e)}
     />
   )
 }
@@ -79,6 +86,7 @@ export default function RoomPage() {
   const [transferStatus, setTransferStatus] = useState<string>('')
   const [conversationHistory, setConversationHistory] = useState<string[]>([])
   const [participantStatus, setParticipantStatus] = useState<{[key: string]: {muted: boolean, videoEnabled: boolean}}>({})
+  const [maximizedParticipant, setMaximizedParticipant] = useState<string | null>(null)
 
   const roomRef = useRef<Room | null>(null)
   const localVideoRef = useRef<HTMLVideoElement>(null)
@@ -298,7 +306,7 @@ export default function RoomPage() {
     }
   }, [room, isVideoEnabled])
 
-  // Effect to periodically sync participants
+  // Effect to periodically sync participants and their status
   useEffect(() => {
     if (!room || !isConnected) return
 
@@ -306,13 +314,23 @@ export default function RoomPage() {
       const allParticipants = Array.from(room.remoteParticipants.values())
       console.log('Periodic sync - participants:', allParticipants.map(p => p.identity))
       setParticipants(allParticipants)
+      
+      // Update participant status
+      const updatedStatus: {[key: string]: {muted: boolean, videoEnabled: boolean}} = {}
+      allParticipants.forEach(participant => {
+        updatedStatus[participant.identity] = {
+          muted: !participant.isMicrophoneEnabled,
+          videoEnabled: participant.isCameraEnabled
+        }
+      })
+      setParticipantStatus(updatedStatus)
     }
 
     // Sync immediately
     syncParticipants()
 
-    // Set up periodic sync every 2 seconds
-    const interval = setInterval(syncParticipants, 2000)
+    // Set up periodic sync every 1 second for real-time updates
+    const interval = setInterval(syncParticipants, 1000)
 
     return () => clearInterval(interval)
   }, [room, isConnected])
@@ -429,6 +447,15 @@ export default function RoomPage() {
       setIsVideoEnabled(!isVideoEnabled)
     } catch (error) {
       console.error('Error toggling video:', error)
+    }
+  }
+
+  // Maximize/minimize participant
+  const toggleMaximize = (participantId: string) => {
+    if (maximizedParticipant === participantId) {
+      setMaximizedParticipant(null)
+    } else {
+      setMaximizedParticipant(participantId)
     }
   }
 
@@ -604,7 +631,13 @@ export default function RoomPage() {
                   const isParticipantVideoOff = !participantStatusData.videoEnabled
                   
                   return (
-                    <div key={participant.identity} className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative">
+                    <div 
+                      key={participant.identity} 
+                      className={`bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative cursor-pointer transition-all duration-300 ${
+                        maximizedParticipant === participant.identity ? 'ring-4 ring-blue-500' : ''
+                      }`}
+                      onClick={() => toggleMaximize(participant.identity)}
+                    >
                       {!isParticipantVideoOff ? (
                         <RemoteVideoTrack participant={participant} />
                       ) : (
@@ -618,6 +651,27 @@ export default function RoomPage() {
                           </div>
                         </div>
                       )}
+                      
+                      {/* Maximize/Minimize Button */}
+                      <div className="absolute top-1 sm:top-2 right-1 sm:right-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleMaximize(participant.identity)
+                          }}
+                          className="bg-black bg-opacity-50 text-white p-1 rounded-full hover:bg-opacity-70 transition-all"
+                        >
+                          {maximizedParticipant === participant.identity ? (
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M15 9v4.5M15 9h4.5M15 9l5.5-5.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 15v-4.5M15 15h4.5M15 15l5.5 5.5" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                       
                       {/* Status Indicators for other participants - Mobile Responsive */}
                       <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 flex gap-1">
