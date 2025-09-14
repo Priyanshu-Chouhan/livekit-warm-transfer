@@ -127,7 +127,7 @@ async def create_room(request: RoomCreateRequest):
                 "max_participants": room_info.max_participants,
                 "creation_time": room_info.creation_time,
                 "turn_password": room_info.turn_password,
-                "enabled_codecs": [codec.mime_type for codec in room_info.enabled_codecs] if room_info.enabled_codecs else [],
+                "enabled_codecs": [getattr(codec, 'mime_type', str(codec)) for codec in room_info.enabled_codecs] if room_info.enabled_codecs else [],
                 "metadata": room_info.metadata
             }
         }
