@@ -65,10 +65,13 @@ export default function RoomPage() {
         })
 
         if (!response.ok) {
-          throw new Error('Failed to create room')
+          const errorText = await response.text()
+          console.error('API Error:', errorText)
+          throw new Error(`Failed to create room: ${response.status} ${errorText}`)
         }
 
         const { token, url } = await response.json()
+        console.log('Room created successfully:', { token: token.substring(0, 20) + '...', url })
         
         // Create LiveKit room
         const newRoom = new Room({

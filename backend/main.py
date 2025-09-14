@@ -12,9 +12,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from livekit import api
-from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
-from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import openai
+# from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
+# from livekit.agents.voice_assistant import VoiceAssistant
+# from livekit.plugins import openai
 import openai as openai_client
 from dotenv import load_dotenv
 
@@ -38,12 +38,8 @@ LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize LiveKit client
-livekit_client = api.LiveKitAPI(
-    url=LIVEKIT_URL,
-    api_key=LIVEKIT_API_KEY,
-    api_secret=LIVEKIT_API_SECRET,
-)
+# Initialize LiveKit client (will be created in async context)
+livekit_client = None
 
 # Initialize OpenAI client
 openai_client.api_key = OPENAI_API_KEY
@@ -76,6 +72,15 @@ async def root():
 async def create_room(request: RoomCreateRequest):
     """Create a new LiveKit room with token"""
     try:
+        # Initialize LiveKit client
+        global livekit_client
+        if livekit_client is None:
+            livekit_client = api.LiveKitAPI(
+                url=LIVEKIT_URL,
+                api_key=LIVEKIT_API_KEY,
+                api_secret=LIVEKIT_API_SECRET,
+            )
+        
         room_name = request.room_name
         participant_type = request.participant_type
         
@@ -116,7 +121,15 @@ async def create_room(request: RoomCreateRequest):
             "room_name": room_name,
             "token": jwt_token,
             "url": LIVEKIT_URL,
-            "room_info": room_info
+            "room_info": {
+                "name": room_info.name,
+                "num_participants": room_info.num_participants,
+                "max_participants": room_info.max_participants,
+                "creation_time": room_info.creation_time,
+                "turn_password": room_info.turn_password,
+                "enabled_codecs": [codec.mime_type for codec in room_info.enabled_codecs] if room_info.enabled_codecs else [],
+                "metadata": room_info.metadata
+            }
         }
         
     except Exception as e:
@@ -148,7 +161,8 @@ async def join_room(room_name: str, participant_type: str):
         return {
             "room_name": room_name,
             "token": jwt_token,
-            "url": LIVEKIT_URL
+            "url": LIVEKIT_URL,
+            "status": "success"
         }
         
     except Exception as e:
