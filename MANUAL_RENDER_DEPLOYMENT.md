@@ -46,7 +46,7 @@ Name: livekit-warm-transfer-backend
 Environment: Python 3
 Region: Oregon (US West)
 Branch: main
-Root Directory: (leave empty)
+Root Directory: . (project root)
 Build Command: pip install -r requirements.txt
 Start Command: python backend/main.py
 ```
