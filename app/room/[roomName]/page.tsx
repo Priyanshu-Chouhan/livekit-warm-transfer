@@ -844,59 +844,59 @@ export default function RoomPage() {
 
       {/* Google Meet Style Transfer Modal */}
       {showTransferModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-3xl w-full mx-4 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <ArrowRightLeft className="w-8 h-8 text-white" />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl p-4 sm:p-8 max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <ArrowRightLeft className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Warm Transfer Initiated</h2>
-              <p className="text-gray-600">AI is preparing call summary for handoff</p>
+              <h2 className="text-xl sm:text-3xl font-bold text-gray-900 mb-2">Warm Transfer Initiated</h2>
+              <p className="text-sm sm:text-base text-gray-600">AI is preparing call summary for handoff</p>
             </div>
             
             {callSummary && (
-              <div className="mb-8">
-                <h3 className="text-xl font-semibold mb-4 text-gray-900">AI-Generated Call Summary:</h3>
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                      <span className="text-white font-bold text-sm">AI</span>
+              <div className="mb-6 sm:mb-8">
+                <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-900">AI-Generated Call Summary:</h3>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 sm:p-6 rounded-xl">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                      <span className="text-white font-bold text-xs sm:text-sm">AI</span>
                     </div>
-                    <p className="text-gray-800 leading-relaxed">{callSummary.summary}</p>
+                    <p className="text-sm sm:text-base text-gray-800 leading-relaxed">{callSummary.summary}</p>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="mb-8">
-              <h3 className="text-xl font-semibold mb-4 text-gray-900">Next Steps:</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
-                  <span className="text-gray-700">Agent B should join the room</span>
+            <div className="mb-6 sm:mb-8">
+              <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-900">Next Steps:</h3>
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs sm:text-sm font-bold">1</div>
+                  <span className="text-sm sm:text-base text-gray-700">Agent B should join the room</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
-                  <span className="text-gray-700">Explain the call summary to Agent B</span>
+                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs sm:text-sm font-bold">2</div>
+                  <span className="text-sm sm:text-base text-gray-700">Explain the call summary to Agent B</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
-                  <span className="text-gray-700">Complete the transfer when ready</span>
+                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs sm:text-sm font-bold">3</div>
+                  <span className="text-sm sm:text-base text-gray-700">Complete the transfer when ready</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
               <button
                 onClick={handleCompleteTransfer}
-                className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
+                className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl text-sm sm:text-base"
               >
-                <ArrowRightLeft className="w-5 h-5" />
+                <ArrowRightLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 Complete Transfer
               </button>
               <button
                 onClick={() => setShowTransferModal(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200"
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-200 text-sm sm:text-base"
               >
                 Cancel
               </button>
@@ -906,9 +906,9 @@ export default function RoomPage() {
                     handleLeaveCall()
                   }
                 }}
-                className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2"
+                className="bg-red-500 hover:bg-red-600 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 text-sm sm:text-base"
               >
-                <PhoneOff className="w-5 h-5" />
+                <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
                 Leave Call
               </button>
             </div>
