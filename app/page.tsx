@@ -98,9 +98,17 @@ export default function Home() {
                 type="text"
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value)}
-                placeholder="Enter room name (e.g., support-call-001)"
+                placeholder="Enter room name (e.g., abc, support-call-001)"
                 className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleJoinRoom()
+                  }
+                }}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Tip: Use same room name to join existing calls
+              </p>
             </div>
 
             {/* Google Meet Style Join Button - Mobile Responsive */}
@@ -120,14 +128,19 @@ export default function Home() {
         <div className="mt-8 sm:mt-12 bg-blue-50 rounded-xl p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-semibold text-blue-900 mb-3">Demo Instructions</h3>
           <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-sm sm:text-base text-blue-800">
-            <li>Open multiple browser tabs/windows</li>
+            <li>Enter same room name (e.g., "abc") in all tabs</li>
             <li>Join as "Caller" in one tab, "Agent A" in another</li>
-            <li>Start a conversation in the call</li>
+            <li>You'll see each other in the same room - start talking!</li>
             <li>Agent A clicks "Transfer Call" to initiate warm transfer</li>
-            <li>Join as "Agent B" in a third tab</li>
+            <li>Join as "Agent B" in a third tab with same room name</li>
             <li>Agent A explains the AI-generated summary to Agent B</li>
             <li>Agent A leaves, completing the transfer</li>
           </ol>
+          <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              <strong>💡 Important:</strong> Use the same room name in all tabs to join the same call!
+            </p>
+          </div>
         </div>
       </div>
     </div>

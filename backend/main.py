@@ -98,17 +98,24 @@ async def create_room(request: RoomCreateRequest):
         room_name = request.room_name
         participant_type = request.participant_type
         
-        # Create room
-        room_info = await livekit_client.room.create_room(
-            api.CreateRoomRequest(
-                name=room_name,
-                max_participants=10,
-                metadata=json.dumps({
-                    "participant_type": participant_type,
-                    "created_at": datetime.now().isoformat()
-                })
+        # Check if room already exists, if not create it
+        try:
+            # Try to get existing room first
+            room_info = await livekit_client.room.get_room(room_name)
+            print(f"Room {room_name} already exists, using existing room")
+        except:
+            # Room doesn't exist, create new one
+            print(f"Creating new room: {room_name}")
+            room_info = await livekit_client.room.create_room(
+                api.CreateRoomRequest(
+                    name=room_name,
+                    max_participants=10,
+                    metadata=json.dumps({
+                        "participant_type": participant_type,
+                        "created_at": datetime.now().isoformat()
+                    })
+                )
             )
-        )
         
         # Generate unique participant identity with random number
         import random
