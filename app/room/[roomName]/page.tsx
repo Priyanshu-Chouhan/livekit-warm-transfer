@@ -117,21 +117,26 @@ export default function RoomPage() {
 
   // Simulate conversation based on participant actions
   const simulateConversation = () => {
-    const messages = [
-      "Hello, thank you for calling. How can I help you today?",
-      "I'm having trouble logging into my account. It says invalid credentials.",
-      "I understand your frustration. Let me check your account status.",
-      "I can see your account is active. Let me try a password reset for you.",
-      "I've initiated a password reset. You should receive an email shortly.",
-      "I'm transferring you to our technical specialist who can help further.",
-      "Thank you for your patience. I'm connecting you now."
+    // More realistic conversation flow
+    const conversationFlow = [
+      { speaker: 'agent_a', message: "Hello, thank you for calling. How can I help you today?", delay: 1000 },
+      { speaker: 'caller', message: "Hi, I'm having trouble logging into my account. It says invalid credentials.", delay: 3000 },
+      { speaker: 'agent_a', message: "I understand your frustration. Let me check your account status for you.", delay: 5000 },
+      { speaker: 'agent_a', message: "I can see your account is active. Let me try a password reset for you.", delay: 7000 },
+      { speaker: 'caller', message: "That would be great, thank you so much for your help.", delay: 9000 },
+      { speaker: 'agent_a', message: "I've initiated a password reset. You should receive an email shortly.", delay: 11000 },
+      { speaker: 'caller', message: "Perfect! I'll check my email. Is there anything else I need to do?", delay: 13000 },
+      { speaker: 'agent_a', message: "I'm transferring you to our technical specialist who can help further.", delay: 15000 },
+      { speaker: 'agent_a', message: "Thank you for your patience. I'm connecting you now.", delay: 17000 }
     ]
     
-    messages.forEach((message, index) => {
+    conversationFlow.forEach(({ speaker, message, delay }) => {
       setTimeout(() => {
-        const speaker = index % 2 === 0 ? participantType : (participantType === 'caller' ? 'agent_a' : 'caller')
-        addConversationMessage(speaker, message, 'audio')
-      }, (index + 1) * 2000) // 2 second intervals
+        // Only add message if the current participant matches the speaker
+        if (speaker === participantType || speaker === 'caller') {
+          addConversationMessage(speaker, message, 'audio')
+        }
+      }, delay)
     })
   }
 
@@ -254,23 +259,45 @@ export default function RoomPage() {
           participant.on('trackSubscribed', (track, publication) => {
             console.log('Remote track subscribed:', track.kind, 'from', participant.identity)
             if (track.kind === 'audio') {
-              // Create audio element for remote audio
-              const audioElement = document.createElement('audio')
-              audioElement.autoplay = true
-              audioElement.controls = false
-              audioElement.style.display = 'none'
-              audioElement.volume = 1.0
-              document.body.appendChild(audioElement)
-              
-              // Attach remote audio track
-              track.attach(audioElement)
-              console.log('Remote audio track attached for', participant.identity)
-              
-              // Store reference for cleanup
-              if (!(window as any).remoteAudioElements) {
-                (window as any).remoteAudioElements = new Map()
+              try {
+                // Create audio element for remote audio
+                const audioElement = document.createElement('audio')
+                audioElement.autoplay = true
+                audioElement.controls = false
+                audioElement.style.display = 'none'
+                audioElement.volume = 1.0
+                audioElement.muted = false
+                document.body.appendChild(audioElement)
+                
+                // Attach remote audio track
+                track.attach(audioElement)
+                console.log('Remote audio track attached for', participant.identity)
+                
+                // Test audio playback
+                audioElement.play().then(() => {
+                  console.log('Remote audio playback started for', participant.identity)
+                }).catch((playError) => {
+                  console.error('Remote audio playback failed for', participant.identity, ':', playError)
+                })
+                
+                // Store reference for cleanup
+                if (!(window as any).remoteAudioElements) {
+                  (window as any).remoteAudioElements = new Map()
+                }
+                (window as any).remoteAudioElements.set(participant.identity, audioElement)
+                
+                // Update participant status
+                setParticipantStatus(prev => ({
+                  ...prev,
+                  [participant.identity]: {
+                    ...prev[participant.identity],
+                    muted: track.isMuted || false
+                  }
+                }))
+                
+              } catch (error) {
+                console.error('Error setting up remote audio for', participant.identity, ':', error)
               }
-              (window as any).remoteAudioElements.set(participant.identity, audioElement)
             }
           })
           
@@ -334,10 +361,16 @@ export default function RoomPage() {
           console.log('Audio and video enabled after connection with constraints')
           
           // Ensure microphone is properly enabled and unmuted
-          const audioTrackPublication = Array.from(newRoom.localParticipant.audioTrackPublications.values())[0]
-          if (audioTrackPublication && audioTrackPublication.track) {
+          const audioTrackPublications = Array.from(newRoom.localParticipant.audioTrackPublications.values())
+          console.log('Local audio track publications count:', audioTrackPublications.length)
+          
+          if (audioTrackPublications.length > 0) {
+            const audioTrackPublication = audioTrackPublications[0]
+            console.log('Local audio track found:', audioTrackPublication.track?.kind)
+            console.log('Local audio track muted:', audioTrackPublication.track?.isMuted)
+            
             // Unmute the audio track (mute() toggles, so if muted, call mute() to unmute)
-            if (audioTrackPublication.track.isMuted) {
+            if (audioTrackPublication.track?.isMuted) {
               audioTrackPublication.track.mute() // This will unmute if currently muted
               console.log('Local audio track unmuted')
             } else {
@@ -345,10 +378,25 @@ export default function RoomPage() {
             }
             
             console.log('Local audio track is enabled and ready for transmission')
+            
+            // Force audio track to be published
+            try {
+              await newRoom.localParticipant.setMicrophoneEnabled(true)
+              console.log('Microphone re-enabled to ensure publishing')
+            } catch (error) {
+              console.error('Error re-enabling microphone:', error)
+            }
           } else {
             // If no audio track, try to enable microphone again
+            console.log('No audio track found, enabling microphone...')
             await newRoom.localParticipant.setMicrophoneEnabled(true)
-            console.log('Microphone re-enabled')
+            console.log('Microphone enabled')
+            
+            // Check again after enabling
+            setTimeout(() => {
+              const newAudioTrackPublications = Array.from(newRoom.localParticipant.audioTrackPublications.values())
+              console.log('New audio track publications count:', newAudioTrackPublications.length)
+            }, 1000)
           }
         } catch (error) {
           console.error('Error enabling audio/video:', error)
