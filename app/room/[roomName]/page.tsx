@@ -275,12 +275,20 @@ export default function RoomPage() {
                 document.body.appendChild(audioElement)
                 
                 // Attach the audio track to the element
-                audioTrackPublication.track.attach(audioElement)
-                console.log('Audio track attached to element for output')
+                if (audioTrackPublication.track && typeof audioTrackPublication.track.attach === 'function') {
+                  audioTrackPublication.track.attach(audioElement)
+                  console.log('Audio track attached to element for output')
+                } else {
+                  console.log('Audio track attach method not available')
+                }
                 
                 // Set volume to maximum
-                audioElement.volume = 1.0
-                console.log('Audio volume set to maximum')
+                try {
+                  audioElement.volume = 1.0
+                  console.log('Audio volume set to maximum')
+                } catch (volumeError) {
+                  console.error('Error setting volume:', volumeError)
+                }
                 
                 // Store reference for cleanup
                 (window as any).audioElement = audioElement
@@ -592,12 +600,20 @@ export default function RoomPage() {
           audioElement.autoplay = true
           audioElement.controls = false
           audioElement.style.display = 'none'
-          audioElement.volume = 1.0
+          try {
+            audioElement.volume = 1.0
+          } catch (volumeError) {
+            console.error('Error setting volume:', volumeError)
+          }
           document.body.appendChild(audioElement)
           
           // Attach audio track
-          audioTrackPublication.track.attach(audioElement)
-          console.log('Audio track attached to element for output')
+          if (audioTrackPublication.track && typeof audioTrackPublication.track.attach === 'function') {
+            audioTrackPublication.track.attach(audioElement)
+            console.log('Audio track attached to element for output')
+          } else {
+            console.log('Audio track attach method not available')
+          }
           
           // Store reference
           (window as any).audioElement = audioElement
