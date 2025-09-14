@@ -106,7 +106,9 @@ export default function RoomPage() {
           throw new Error('Camera and microphone access is required. Please allow access and refresh the page.')
         }
         // Get room token from backend
-        const response = await fetch('http://localhost:8000/api/rooms/create', {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL_LOCAL || process.env.NEXT_PUBLIC_API_URL_LIVE
+        
+        const response = await fetch(`${API_URL}/api/rooms/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -289,7 +291,7 @@ export default function RoomPage() {
       setTransferStatus('Initiating transfer...')
       
       // Generate call summary
-      const summaryResponse = await fetch('http://localhost:8000/api/summary/generate', {
+        const summaryResponse = await fetch(`${API_URL}/api/summary/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -322,7 +324,7 @@ export default function RoomPage() {
       }
       
       // Notify backend
-      await fetch(`http://localhost:8000/api/rooms/${roomName}/leave`, {
+      await fetch(`${API_URL}/api/rooms/${roomName}/leave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -391,7 +393,7 @@ export default function RoomPage() {
       }
       
       // Notify backend about leaving
-      await fetch(`http://localhost:8000/api/rooms/${roomName}/leave`, {
+      await fetch(`${API_URL}/api/rooms/${roomName}/leave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -589,7 +591,7 @@ export default function RoomPage() {
                       
                       {/* Participant Name - Bottom Right */}
                       <div className="absolute bottom-1 sm:bottom-2 right-1 sm:right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs sm:text-sm font-medium">
-                        {participant.identity}
+                        {participant.identity.split('_')[0] || 'Unknown'} ({participant.identity.split('_')[1] || 'ID'})
                       </div>
                     </div>
                   )

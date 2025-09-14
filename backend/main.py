@@ -108,10 +108,29 @@ async def create_room(request: RoomCreateRequest):
             )
         )
         
+        # Generate unique participant identity with random number
+        import random
+        import time
+        
+        # Check existing participants in room to avoid duplicates
+        existing_ids = set()
+        if room_name in active_rooms:
+            for participant in active_rooms[room_name].get("participants", []):
+                if "_" in participant:
+                    existing_ids.add(participant.split("_")[1])
+        
+        # Generate unique ID that doesn't exist
+        while True:
+            unique_id = random.randint(1000, 9999)
+            if str(unique_id) not in existing_ids:
+                break
+        
+        participant_identity = f"{participant_type}_{unique_id}"
+        
         # Generate token for participant
         token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-        token.with_identity(participant_type)
-        token.with_name(f"{participant_type}_{room_name}")
+        token.with_identity(participant_identity)
+        token.with_name(f"{participant_type} ({unique_id})")
         token.with_grants(api.VideoGrants(
             room_join=True,
             room=room_name,
@@ -122,12 +141,17 @@ async def create_room(request: RoomCreateRequest):
         jwt_token = token.to_jwt()
         
         # Store room info
-        active_rooms[room_name] = {
-            "room_info": room_info,
-            "participants": [participant_type],
-            "created_at": datetime.now().isoformat(),
-            "status": "active"
-        }
+        if room_name in active_rooms:
+            # Add new participant to existing room
+            active_rooms[room_name]["participants"].append(participant_identity)
+        else:
+            # Create new room
+            active_rooms[room_name] = {
+                "room_info": room_info,
+                "participants": [participant_identity],
+                "created_at": datetime.now().isoformat(),
+                "status": "active"
+            }
         
         return {
             "room_name": room_name,

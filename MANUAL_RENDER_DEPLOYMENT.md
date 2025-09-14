@@ -31,7 +31,7 @@ Start Command: npm start
 NODE_ENV = production
 NEXT_PUBLIC_LIVEKIT_URL = wss://your-livekit-url.livekit.cloud
 NEXT_PUBLIC_LIVEKIT_API_KEY = your-livekit-api-key
-NEXT_PUBLIC_API_URL = https://livekit-warm-transfer-backend.onrender.com
+NEXT_PUBLIC_API_URL_LIVE = https://livekit-warm-transfer-backend.onrender.com
 ```
 
 ## Step 3: Backend Service Deploy करें
