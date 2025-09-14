@@ -160,6 +160,13 @@ export default function RoomPage() {
           })
           setParticipantStatus(initialStatus)
           console.log('Initial participant status:', initialStatus)
+          
+          // Force update participants list after a short delay
+          setTimeout(() => {
+            const updatedParticipants = Array.from(newRoom.remoteParticipants.values())
+            console.log('Updated participants after delay:', updatedParticipants.map(p => p.identity))
+            setParticipants(updatedParticipants)
+          }, 1000)
         })
 
         newRoom.on(RoomEvent.Disconnected, () => {
@@ -175,8 +182,10 @@ export default function RoomPage() {
             // Check if participant already exists to avoid duplicates
             const exists = prev.some(p => p.identity === participant.identity)
             if (!exists) {
+              console.log('Adding new participant:', participant.identity)
               return [...prev, participant]
             }
+            console.log('Participant already exists:', participant.identity)
             return prev
           })
           
@@ -188,6 +197,13 @@ export default function RoomPage() {
               videoEnabled: participant.isCameraEnabled
             }
           }))
+          
+          // Force refresh participants list
+          setTimeout(() => {
+            const allParticipants = Array.from(newRoom.remoteParticipants.values())
+            console.log('All participants after connect:', allParticipants.map(p => p.identity))
+            setParticipants(allParticipants)
+          }, 500)
         })
 
         newRoom.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
@@ -281,6 +297,25 @@ export default function RoomPage() {
       }
     }
   }, [room, isVideoEnabled])
+
+  // Effect to periodically sync participants
+  useEffect(() => {
+    if (!room || !isConnected) return
+
+    const syncParticipants = () => {
+      const allParticipants = Array.from(room.remoteParticipants.values())
+      console.log('Periodic sync - participants:', allParticipants.map(p => p.identity))
+      setParticipants(allParticipants)
+    }
+
+    // Sync immediately
+    syncParticipants()
+
+    // Set up periodic sync every 2 seconds
+    const interval = setInterval(syncParticipants, 2000)
+
+    return () => clearInterval(interval)
+  }, [room, isConnected])
 
   // Handle transfer initiation
   const handleTransferCall = async () => {
