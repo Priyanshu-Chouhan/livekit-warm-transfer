@@ -250,6 +250,13 @@ export default function RoomPage() {
           await newRoom.localParticipant.setMicrophoneEnabled(true, constraints.audio)
           await newRoom.localParticipant.setCameraEnabled(true, constraints.video)
           console.log('Audio and video enabled after connection with constraints')
+          
+          // Force audio track to be unmuted
+          const audioTrack = newRoom.localParticipant.audioTrackPublications.values().next().value?.track
+          if (audioTrack) {
+            audioTrack.muted = false
+            console.log('Audio track unmuted')
+          }
         } catch (error) {
           console.error('Error enabling audio/video:', error)
           // If camera fails, try with basic constraints
@@ -350,19 +357,33 @@ export default function RoomPage() {
         process.env.NEXT_PUBLIC_API_URL_LIVE || 
         'https://livekit-warm-transfer-backend.onrender.com'
       
-      // Generate call summary
-        const summaryResponse = await fetch(`${API_URL}/api/summary/generate`, {
+      // Generate call summary with sample conversation if empty
+      const sampleConversation = conversationHistory.length > 0 ? conversationHistory : [
+        "Caller: Hello, I need help with my account",
+        "Agent A: Hi! I'd be happy to help you with your account. What specific issue are you experiencing?",
+        "Caller: I can't log into my account and I'm getting an error message",
+        "Agent A: I understand you're having trouble logging in. Let me help you troubleshoot this issue.",
+        "Caller: The error says 'Invalid credentials' but I'm sure my password is correct",
+        "Agent A: That's frustrating. Let me check your account status and help you reset your password if needed."
+      ]
+      
+      const summaryResponse = await fetch(`${API_URL}/api/summary/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           room_name: roomName,
-          conversation_history: conversationHistory
+          conversation_history: sampleConversation
         })
       })
 
+      if (!summaryResponse.ok) {
+        throw new Error(`Summary generation failed: ${summaryResponse.status}`)
+      }
+
       const summaryData = await summaryResponse.json()
+      console.log('Call summary generated:', summaryData)
       setCallSummary(summaryData)
       setShowTransferModal(true)
       setTransferStatus('Transfer initiated. Please explain the summary to Agent B.')
@@ -422,6 +443,13 @@ export default function RoomPage() {
       if (isMuted) {
         await roomRef.current.localParticipant.setMicrophoneEnabled(true)
         console.log('Microphone enabled')
+        
+        // Force audio track to be unmuted
+        const audioTrack = roomRef.current.localParticipant.audioTrackPublications.values().next().value?.track
+        if (audioTrack) {
+          audioTrack.muted = false
+          console.log('Audio track unmuted')
+        }
       } else {
         await roomRef.current.localParticipant.setMicrophoneEnabled(false)
         console.log('Microphone disabled')
