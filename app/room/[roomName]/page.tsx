@@ -251,11 +251,15 @@ export default function RoomPage() {
           await newRoom.localParticipant.setCameraEnabled(true, constraints.video)
           console.log('Audio and video enabled after connection with constraints')
           
-          // Force audio track to be unmuted
-          const audioTrack = newRoom.localParticipant.audioTrackPublications.values().next().value?.track
-          if (audioTrack) {
-            audioTrack.muted = false
+          // Force audio track to be unmuted and ensure it's published
+          const audioTrackPublication = Array.from(newRoom.localParticipant.audioTrackPublications.values())[0]
+          if (audioTrackPublication && audioTrackPublication.track) {
+            audioTrackPublication.track.muted = false
             console.log('Audio track unmuted')
+          } else {
+            // If no audio track, try to enable microphone again
+            await newRoom.localParticipant.setMicrophoneEnabled(true)
+            console.log('Microphone re-enabled')
           }
         } catch (error) {
           console.error('Error enabling audio/video:', error)
@@ -444,11 +448,15 @@ export default function RoomPage() {
         await roomRef.current.localParticipant.setMicrophoneEnabled(true)
         console.log('Microphone enabled')
         
-        // Force audio track to be unmuted
-        const audioTrack = roomRef.current.localParticipant.audioTrackPublications.values().next().value?.track
-        if (audioTrack) {
-          audioTrack.muted = false
+        // Force audio track to be unmuted and ensure it's published
+        const audioTrackPublication = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())[0]
+        if (audioTrackPublication && audioTrackPublication.track) {
+          audioTrackPublication.track.muted = false
           console.log('Audio track unmuted')
+        } else {
+          // If no audio track, try to enable microphone again
+          await roomRef.current.localParticipant.setMicrophoneEnabled(true)
+          console.log('Microphone re-enabled')
         }
       } else {
         await roomRef.current.localParticipant.setMicrophoneEnabled(false)
@@ -484,6 +492,25 @@ export default function RoomPage() {
       setMaximizedParticipant(null)
     } else {
       setMaximizedParticipant(participantId)
+    }
+  }
+
+  // Test audio function
+  const testAudio = async () => {
+    if (!roomRef.current) return
+    
+    try {
+      console.log('Testing audio...')
+      const audioTrackPublication = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())[0]
+      if (audioTrackPublication && audioTrackPublication.track) {
+        console.log('Audio track found:', audioTrackPublication.track)
+        console.log('Audio track muted:', audioTrackPublication.track.muted)
+        console.log('Audio track enabled:', audioTrackPublication.track.enabled)
+      } else {
+        console.log('No audio track found')
+      }
+    } catch (error) {
+      console.error('Audio test failed:', error)
     }
   }
 
@@ -782,6 +809,20 @@ export default function RoomPage() {
               <span className={`text-xs ${!isVideoEnabled ? 'text-red-500' : 'text-gray-500'} hidden sm:block`}>
                 {!isVideoEnabled ? 'Camera Off' : 'Camera On'}
               </span>
+            </div>
+
+            {/* Audio Test Button - Mobile Responsive */}
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+              <button
+                onClick={testAudio}
+                className="p-2 sm:p-3 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200"
+                title="Test Audio"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </button>
+              <span className="text-xs text-blue-500 hidden sm:block">Test</span>
             </div>
 
             {/* Leave Button - More Prominent - Mobile Responsive */}

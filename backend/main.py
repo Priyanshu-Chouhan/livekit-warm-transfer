@@ -297,7 +297,7 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
         
         print(f"Generating summary for room {room_name} with {len(conversation_history)} messages")
         
-        response = await openai_client.ChatCompletion.acreate(
+        response = await openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
