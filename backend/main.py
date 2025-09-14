@@ -302,30 +302,37 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
         
         print(f"Generating summary for room {room_name} with {len(conversation_history)} messages")
         
-        # Try Gemini first, fallback to OpenAI
+        # Use Gemini as primary API
         try:
-            # Use Gemini API
+            # Use Gemini API (Primary)
             model = genai.GenerativeModel('gemini-1.5-flash')
             response = model.generate_content(prompt)
             summary = response.text.strip()
-            print(f"Generated summary with Gemini: {summary}")
+            print(f"Generated summary with Gemini (Primary): {summary}")
             
         except Exception as gemini_error:
-            print(f"Gemini failed: {str(gemini_error)}, trying OpenAI...")
+            print(f"Gemini failed: {str(gemini_error)}, trying OpenAI fallback...")
             
-            # Fallback to OpenAI
-            response = await openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=150,
-                temperature=0.7
-            )
-            
-            summary = response.choices[0].message.content.strip()
-            print(f"Generated summary with OpenAI: {summary}")
+            # Fallback to OpenAI only if Gemini fails
+            try:
+                response = await openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=150,
+                    temperature=0.7
+                )
+                
+                summary = response.choices[0].message.content.strip()
+                print(f"Generated summary with OpenAI (Fallback): {summary}")
+                
+            except Exception as openai_error:
+                print(f"Both APIs failed. Gemini: {str(gemini_error)}, OpenAI: {str(openai_error)}")
+                # Use hardcoded fallback
+                summary = f"Call Summary: Customer inquiry about {participant_type} services. Duration: {len(conversation_history)} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B."
+                print(f"Using hardcoded fallback summary: {summary}")
         
         # Store summary
         if room_name not in call_contexts:

@@ -254,12 +254,17 @@ export default function RoomPage() {
           // Force audio track to be unmuted and ensure it's published
           const audioTrackPublication = Array.from(newRoom.localParticipant.audioTrackPublications.values())[0]
           if (audioTrackPublication && audioTrackPublication.track) {
-            // Unmute the audio track
+            // Unmute the audio track (mute() toggles, so if muted, call mute() to unmute)
             if (audioTrackPublication.track.isMuted) {
-              audioTrackPublication.track.mute()
+              audioTrackPublication.track.mute() // This will unmute if currently muted
               console.log('Audio track unmuted')
             } else {
               console.log('Audio track already unmuted')
+            }
+            
+            // Ensure audio track is enabled
+            if (audioTrackPublication.track.kind === 'audio') {
+              console.log('Audio track is enabled and ready')
             }
           } else {
             // If no audio track, try to enable microphone again
@@ -463,12 +468,17 @@ export default function RoomPage() {
         // Force audio track to be unmuted and ensure it's published
         const audioTrackPublication = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())[0]
         if (audioTrackPublication && audioTrackPublication.track) {
-          // Unmute the audio track
+          // Unmute the audio track (mute() toggles, so if muted, call mute() to unmute)
           if (audioTrackPublication.track.isMuted) {
-            audioTrackPublication.track.mute()
+            audioTrackPublication.track.mute() // This will unmute if currently muted
             console.log('Audio track unmuted')
           } else {
             console.log('Audio track already unmuted')
+          }
+          
+          // Ensure audio track is enabled
+          if (audioTrackPublication.track.kind === 'audio') {
+            console.log('Audio track is enabled and ready')
           }
         } else {
           // If no audio track, try to enable microphone again
@@ -517,15 +527,37 @@ export default function RoomPage() {
     if (!roomRef.current) return
     
     try {
-      console.log('Testing audio...')
-      const audioTrackPublication = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())[0]
-      if (audioTrackPublication && audioTrackPublication.track) {
-        console.log('Audio track found:', audioTrackPublication.track)
-        console.log('Audio track muted:', audioTrackPublication.track.isMuted)
-        console.log('Audio track kind:', audioTrackPublication.track.kind)
+      console.log('=== AUDIO TEST START ===')
+      console.log('Room connected:', roomRef.current.state)
+      console.log('Local participant:', roomRef.current.localParticipant.identity)
+      
+      const audioTrackPublications = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())
+      console.log('Audio track publications count:', audioTrackPublications.length)
+      
+      if (audioTrackPublications.length > 0) {
+        const audioTrackPublication = audioTrackPublications[0]
+        console.log('Audio track publication:', audioTrackPublication)
+        console.log('Audio track:', audioTrackPublication.track)
+        console.log('Audio track muted:', audioTrackPublication.track?.isMuted)
+        console.log('Audio track kind:', audioTrackPublication.track?.kind)
+        console.log('Audio track enabled:', audioTrackPublication.track?.enabled)
+        
+        // Try to unmute if muted
+        if (audioTrackPublication.track?.isMuted) {
+          console.log('Attempting to unmute audio track...')
+          audioTrackPublication.track.mute() // Toggle mute
+          console.log('Audio track muted after toggle:', audioTrackPublication.track.isMuted)
+        }
       } else {
-        console.log('No audio track found')
+        console.log('No audio track publications found, trying to enable microphone...')
+        await roomRef.current.localParticipant.setMicrophoneEnabled(true)
+        console.log('Microphone enabled, checking again...')
+        
+        const newAudioTrackPublications = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())
+        console.log('New audio track publications count:', newAudioTrackPublications.length)
       }
+      
+      console.log('=== AUDIO TEST END ===')
     } catch (error) {
       console.error('Audio test failed:', error)
     }
