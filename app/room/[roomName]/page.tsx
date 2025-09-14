@@ -30,39 +30,7 @@ interface CallSummary {
   status: string
 }
 
-// Custom video track components
-function LocalVideoTrack() {
-  const room = useRoomContext()
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    if (!room || !videoRef.current) return
-
-    const localParticipant = room.localParticipant
-    const videoTrack = localParticipant.videoTrackPublications.values().next().value?.track
-
-    if (videoTrack && videoRef.current) {
-      videoTrack.attach(videoRef.current)
-    }
-
-    return () => {
-      if (videoTrack && videoRef.current) {
-        videoTrack.detach(videoRef.current)
-      }
-    }
-  }, [room])
-
-  return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted
-      className="w-full h-full object-cover"
-    />
-  )
-}
-
+// Remote video track component
 function RemoteVideoTrack({ participant }: { participant: RemoteParticipant }) {
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -101,6 +69,8 @@ export default function RoomPage() {
   
   const [room, setRoom] = useState<Room | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [roomToken, setRoomToken] = useState<string>('')
+  const [roomUrl, setRoomUrl] = useState<string>('')
   const [participants, setParticipants] = useState<RemoteParticipant[]>([])
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoEnabled, setIsVideoEnabled] = useState(true)
@@ -111,6 +81,7 @@ export default function RoomPage() {
   const [participantStatus, setParticipantStatus] = useState<{[key: string]: {muted: boolean, videoEnabled: boolean}}>({})
 
   const roomRef = useRef<Room | null>(null)
+  const localVideoRef = useRef<HTMLVideoElement>(null)
 
   // Initialize room connection
   useEffect(() => {
@@ -124,7 +95,7 @@ export default function RoomPage() {
         // Check camera and microphone permissions
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
+            video: { facingMode: 'user' as const }, // Request front camera
             audio: true 
           })
           console.log('Camera and microphone access granted')
@@ -135,7 +106,7 @@ export default function RoomPage() {
           throw new Error('Camera and microphone access is required. Please allow access and refresh the page.')
         }
         // Get room token from backend
-        const response = await fetch('http://192.168.142.223:8000/api/rooms/create', {
+        const response = await fetch('http://localhost:8000/api/rooms/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -154,6 +125,8 @@ export default function RoomPage() {
 
         const { token, url } = await response.json()
         console.log('Room created successfully:', { token: token.substring(0, 20) + '...', url })
+        setRoomToken(token)
+        setRoomUrl(url)
         
         // Create LiveKit room with simplified configuration
         const newRoom = new Room({
@@ -225,59 +198,6 @@ export default function RoomPage() {
           })
         })
 
-        // Track participant audio/video changes
-        newRoom.on(RoomEvent.TrackSubscribed, (track, participant) => {
-          console.log('Track subscribed:', track.kind, participant.identity)
-          if (track.kind === 'audio') {
-            setParticipantStatus(prev => ({
-              ...prev,
-              [participant.identity]: {
-                ...prev[participant.identity],
-                muted: !participant.isMicrophoneEnabled
-              }
-            }))
-          } else if (track.kind === 'video') {
-            setParticipantStatus(prev => ({
-              ...prev,
-              [participant.identity]: {
-                ...prev[participant.identity],
-                videoEnabled: participant.isCameraEnabled
-              }
-            }))
-          }
-        })
-
-        newRoom.on(RoomEvent.TrackUnsubscribed, (track, participant) => {
-          console.log('Track unsubscribed:', track.kind, participant.identity)
-          if (track.kind === 'audio') {
-            setParticipantStatus(prev => ({
-              ...prev,
-              [participant.identity]: {
-                ...prev[participant.identity],
-                muted: true
-              }
-            }))
-          } else if (track.kind === 'video') {
-            setParticipantStatus(prev => ({
-              ...prev,
-              [participant.identity]: {
-                ...prev[participant.identity],
-                videoEnabled: false
-              }
-            }))
-          }
-        })
-
-        // Handle track published/unpublished
-        newRoom.on(RoomEvent.TrackPublished, (publication, participant) => {
-          console.log('Track published:', publication.kind, participant.identity)
-        })
-
-        newRoom.on(RoomEvent.TrackUnpublished, (publication, participant) => {
-          console.log('Track unpublished:', publication.kind, participant.identity)
-        })
-
-
         // Connect to room
         await newRoom.connect(url, token)
         
@@ -288,12 +208,14 @@ export default function RoomPage() {
             video: {
               width: { ideal: 1280 },
               height: { ideal: 720 },
-              frameRate: { ideal: 30 }
+              frameRate: { ideal: 30 },
+              facingMode: 'user' as const // Use front camera
             },
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
-              autoGainControl: true
+              autoGainControl: true,
+              sampleRate: 48000
             }
           }
           
@@ -305,7 +227,7 @@ export default function RoomPage() {
           // If camera fails, try with basic constraints
           try {
             await newRoom.localParticipant.setMicrophoneEnabled(true)
-            await newRoom.localParticipant.setCameraEnabled(true)
+            await newRoom.localParticipant.setCameraEnabled(true, { facingMode: 'user' as const })
             console.log('Audio and video enabled with basic constraints')
           } catch (fallbackError) {
             console.error('Fallback audio/video enable failed:', fallbackError)
@@ -338,36 +260,23 @@ export default function RoomPage() {
     }
   }, [roomName, participantType])
 
-  // Periodic status update for participants
+  // Handle local video stream
   useEffect(() => {
-    if (!room || participants.length === 0) return
+    if (!room || !localVideoRef.current) return
 
-    const updateParticipantStatus = () => {
-      setParticipantStatus(prev => {
-        const newStatus = { ...prev }
-        participants.forEach(participant => {
-          const isMuted = !participant.isMicrophoneEnabled
-          const isVideoEnabled = participant.isCameraEnabled
-          
-          console.log(`Participant ${participant.identity}:`, {
-            isMicrophoneEnabled: participant.isMicrophoneEnabled,
-            isCameraEnabled: participant.isCameraEnabled,
-            muted: isMuted,
-            videoEnabled: isVideoEnabled
-          })
-          
-          newStatus[participant.identity] = {
-            muted: isMuted,
-            videoEnabled: isVideoEnabled
-          }
-        })
-        return newStatus
-      })
+    const localParticipant = room.localParticipant
+    const videoTrack = localParticipant.videoTrackPublications.values().next().value?.track
+
+    if (videoTrack && localVideoRef.current) {
+      videoTrack.attach(localVideoRef.current)
     }
 
-    const interval = setInterval(updateParticipantStatus, 1000) // Update every second
-    return () => clearInterval(interval)
-  }, [room, participants])
+    return () => {
+      if (videoTrack && localVideoRef.current) {
+        videoTrack.detach(localVideoRef.current)
+      }
+    }
+  }, [room, isVideoEnabled])
 
   // Handle transfer initiation
   const handleTransferCall = async () => {
@@ -380,7 +289,7 @@ export default function RoomPage() {
       setTransferStatus('Initiating transfer...')
       
       // Generate call summary
-      const summaryResponse = await fetch('http://192.168.142.223:8000/api/summary/generate', {
+      const summaryResponse = await fetch('http://localhost:8000/api/summary/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -413,7 +322,7 @@ export default function RoomPage() {
       }
       
       // Notify backend
-      await fetch(`http://192.168.142.223:8000/api/rooms/${roomName}/leave`, {
+      await fetch(`http://localhost:8000/api/rooms/${roomName}/leave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -482,7 +391,7 @@ export default function RoomPage() {
       }
       
       // Notify backend about leaving
-      await fetch(`http://192.168.142.223:8000/api/rooms/${roomName}/leave`, {
+      await fetch(`http://localhost:8000/api/rooms/${roomName}/leave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -501,7 +410,7 @@ export default function RoomPage() {
     }
   }
 
-  if (!isConnected || !room) {
+  if (!roomToken || !roomUrl) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -514,326 +423,328 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      <RoomAudioRenderer />
       <div className="h-screen flex flex-col">
-          {/* Google Meet Style Header - Mobile Responsive */}
-          <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 sm:py-3">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-xs sm:text-sm">LT</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-sm sm:text-lg font-medium text-gray-900 truncate">{roomName}</h1>
-                  <p className="text-xs sm:text-sm text-gray-500">You are: {participantType}</p>
-                </div>
+        {/* Google Meet Style Header - Mobile Responsive */}
+        <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 sm:py-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xs sm:text-sm">LT</span>
               </div>
-              <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
-                <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
-                  <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">{participants.length + 1} people</span>
-                  <span className="sm:hidden">{participants.length + 1}</span>
-                  <span className="text-xs text-gray-500 hidden sm:inline">({participantType})</span>
-                </div>
-                
-                <div className="flex items-center gap-1 sm:gap-2">
-                  {participantType === 'agent_a' && (
-                    <button
-                      onClick={handleTransferCall}
-                      className="bg-orange-500 hover:bg-orange-600 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-sm font-medium"
-                    >
-                      <ArrowRightLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-                      <span className="hidden sm:inline">Transfer Call</span>
-                      <span className="sm:hidden">Transfer</span>
-                    </button>
-                  )}
-                  
-                  {/* Header Leave Button */}
+              <div className="min-w-0 flex-1">
+                <h1 className="text-sm sm:text-lg font-medium text-gray-900 truncate">{roomName}</h1>
+                <p className="text-xs sm:text-sm text-gray-500">You are: {participantType}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
+              <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
+                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">{participants.length + 1} people</span>
+                <span className="sm:hidden">{participants.length + 1}</span>
+                <span className="text-xs text-gray-500 hidden sm:inline">({participantType})</span>
+              </div>
+              
+              <div className="flex items-center gap-1 sm:gap-2">
+                {participantType === 'agent_a' && (
                   <button
-                    onClick={() => {
-                      if (confirm('Are you sure you want to leave the call?')) {
-                        handleLeaveCall()
-                      }
-                    }}
-                    className="bg-red-500 hover:bg-red-600 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-sm font-medium"
-                    title="Leave call"
+                    onClick={handleTransferCall}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-sm font-medium"
                   >
-                    <PhoneOff className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Leave</span>
+                    <ArrowRightLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Transfer Call</span>
+                    <span className="sm:hidden">Transfer</span>
                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Google Meet Style Video Grid - Mobile Responsive */}
-          <div className="flex-1 relative bg-gray-100">
-            <div className="h-full flex items-center justify-center p-2 sm:p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 w-full max-w-4xl">
-                {/* Current User Video */}
-                <div className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative">
-                  {isVideoEnabled ? (
-                    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-                      <span className="text-white text-sm">Your Camera</span>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                      <div className="text-center text-white">
-                        <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <span className="text-2xl font-bold">{participantType.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <p className="text-sm font-medium">{participantType}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Status Indicators - Mobile Responsive */}
-                  <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 flex gap-1">
-                    {isMuted && (
-                      <div className="bg-red-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
-                        <MicOff className="w-2 h-2 sm:w-3 sm:h-3" />
-                        <span className="hidden sm:inline">Muted</span>
-                      </div>
-                    )}
-                    {!isVideoEnabled && (
-                      <div className="bg-gray-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
-                        <VideoOff className="w-2 h-2 sm:w-3 sm:h-3" />
-                        <span className="hidden sm:inline">Camera Off</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* You indicator - Mobile Responsive */}
-                  <div className="absolute top-1 sm:top-2 left-1 sm:left-2 bg-blue-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs">
-                    You
-                  </div>
-                </div>
-
-                {/* Other Participants */}
-                {participants.length > 0 ? (
-                  participants.map((participant, index) => {
-                    // Get participant type from identity
-                    const participantType = participant.identity.split('_')[0] || 'unknown'
-                    const colors = {
-                      'caller': 'from-red-500 to-pink-500',
-                      'agent-a': 'from-blue-500 to-indigo-500',
-                      'agent-b': 'from-green-500 to-emerald-500',
-                      'agent_a': 'from-blue-500 to-indigo-500',
-                      'agent_b': 'from-green-500 to-emerald-500',
-                      'unknown': 'from-gray-500 to-gray-600'
-                    }
-                    const colorClass = colors[participantType as keyof typeof colors] || colors.unknown
-                    
-                    // Get real participant status
-                    const participantStatusData = participantStatus[participant.identity] || {
-                      muted: !participant.isMicrophoneEnabled,
-                      videoEnabled: participant.isCameraEnabled
-                    }
-                    const isParticipantMuted = participantStatusData.muted
-                    const isParticipantVideoOff = !participantStatusData.videoEnabled
-                    
-                    console.log(`UI Status for ${participant.identity}:`, {
-                      participantStatusData,
-                      isParticipantMuted,
-                      isParticipantVideoOff,
-                      isMicrophoneEnabled: participant.isMicrophoneEnabled,
-                      isCameraEnabled: participant.isCameraEnabled
-                    })
-                    
-                    return (
-                      <div key={participant.identity} className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative">
-                        {!isParticipantVideoOff ? (
-                          <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-                            <span className="text-white text-sm">{participant.identity} Camera</span>
-                          </div>
-                        ) : (
-                          <div className={`absolute inset-0 bg-gradient-to-br ${colorClass} flex items-center justify-center`}>
-                            <div className="text-center text-white">
-                              <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                <span className="text-2xl font-bold">{participantType.charAt(0).toUpperCase()}</span>
-                              </div>
-                              <p className="text-sm font-medium">{participant.identity}</p>
-                              <p className="text-xs opacity-75">{participantType}</p>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Status Indicators for other participants - Mobile Responsive */}
-                        <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 flex gap-1">
-                          {isParticipantMuted && (
-                            <div className="bg-red-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
-                              <MicOff className="w-2 h-2 sm:w-3 sm:h-3" />
-                              <span className="hidden sm:inline">Muted</span>
-                            </div>
-                          )}
-                          {isParticipantVideoOff && (
-                            <div className="bg-gray-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
-                              <VideoOff className="w-2 h-2 sm:w-3 sm:h-3" />
-                              <span className="hidden sm:inline">Camera Off</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Online indicator - Mobile Responsive */}
-                        <div className="absolute top-1 sm:top-2 right-1 sm:right-2 bg-green-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
-                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full"></div>
-                          <span className="hidden sm:inline">Online</span>
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative border-2 border-dashed border-gray-300">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center text-gray-500">
-                        <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">Waiting for others to join...</p>
-                        <p className="text-xs mt-1">You are: {participantType}</p>
-                      </div>
-                    </div>
-                  </div>
                 )}
-              </div>
-            </div>
-          </div>
-
-          {/* Google Meet Style Control Bar - Mobile Responsive */}
-          <div className="bg-white border-t border-gray-200 px-2 sm:px-6 py-2 sm:py-4">
-            <div className="flex justify-center items-center gap-2 sm:gap-4">
-              {/* Audio Button with Status - Mobile Responsive */}
-              <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                <button
-                  onClick={toggleAudio}
-                  className={`p-2 sm:p-3 rounded-full transition-all duration-200 ${
-                    isMuted 
-                      ? 'bg-red-500 hover:bg-red-600 text-white' 
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                  }`}
-                  title={isMuted ? 'Unmute' : 'Mute'}
-                >
-                  {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
-                <span className={`text-xs ${isMuted ? 'text-red-500' : 'text-gray-500'} hidden sm:block`}>
-                  {isMuted ? 'Muted' : 'Unmuted'}
-                </span>
-              </div>
-              
-              {/* Video Button with Status - Mobile Responsive */}
-              <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                <button
-                  onClick={toggleVideo}
-                  className={`p-2 sm:p-3 rounded-full transition-all duration-200 ${
-                    !isVideoEnabled 
-                      ? 'bg-red-500 hover:bg-red-600 text-white' 
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                  }`}
-                  title={!isVideoEnabled ? 'Turn on camera' : 'Turn off camera'}
-                >
-                  {!isVideoEnabled ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
-                <span className={`text-xs ${!isVideoEnabled ? 'text-red-500' : 'text-gray-500'} hidden sm:block`}>
-                  {!isVideoEnabled ? 'Camera Off' : 'Camera On'}
-                </span>
-              </div>
-
-              {/* Leave Button - More Prominent - Mobile Responsive */}
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to leave the call?')) {
-                    handleLeaveCall()
-                  }
-                }}
-                className="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full transition-all duration-200 flex items-center gap-1 sm:gap-2 font-semibold shadow-lg hover:shadow-xl"
-                title="Leave call"
-              >
-                <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Leave</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Google Meet Style Transfer Modal */}
-        {showTransferModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8 max-w-3xl w-full mx-4 shadow-2xl">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <ArrowRightLeft className="w-8 h-8 text-white" />
-                </div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Warm Transfer Initiated</h2>
-                <p className="text-gray-600">AI is preparing call summary for handoff</p>
-              </div>
-              
-              {callSummary && (
-                <div className="mb-8">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-900">AI-Generated Call Summary:</h3>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                        <span className="text-white font-bold text-sm">AI</span>
-                      </div>
-                      <p className="text-gray-800 leading-relaxed">{callSummary.summary}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="mb-8">
-                <h3 className="text-xl font-semibold mb-4 text-gray-900">Next Steps:</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
-                    <span className="text-gray-700">Agent B should join the room</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
-                    <span className="text-gray-700">Explain the call summary to Agent B</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
-                    <span className="text-gray-700">Complete the transfer when ready</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-4 justify-center">
-                <button
-                  onClick={handleCompleteTransfer}
-                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
-                >
-                  <ArrowRightLeft className="w-5 h-5" />
-                  Complete Transfer
-                </button>
-                <button
-                  onClick={() => setShowTransferModal(false)}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200"
-                >
-                  Cancel
-                </button>
+                
+                {/* Header Leave Button */}
                 <button
                   onClick={() => {
                     if (confirm('Are you sure you want to leave the call?')) {
                       handleLeaveCall()
                     }
                   }}
-                  className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2"
+                  className="bg-red-500 hover:bg-red-600 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-sm font-medium"
+                  title="Leave call"
                 >
-                  <PhoneOff className="w-5 h-5" />
-                  Leave Call
+                  <PhoneOff className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Leave</span>
                 </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Transfer Status */}
-        {transferStatus && (
-          <div className="fixed top-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-40">
-            <p>{transferStatus}</p>
+        {/* Google Meet Style Video Grid - Mobile Responsive */}
+        <div className="flex-1 relative bg-gray-100">
+          <div className="h-full flex items-center justify-center p-2 sm:p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 w-full max-w-4xl">
+              {/* Current User Video */}
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative">
+                {isVideoEnabled ? (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <span className="text-2xl font-bold">{participantType.charAt(0).toUpperCase()}</span>
+                      </div>
+                      <p className="text-sm font-medium">{participantType}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Status Indicators - Mobile Responsive */}
+                <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 flex gap-1">
+                  {isMuted && (
+                    <div className="bg-red-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
+                      <MicOff className="w-2 h-2 sm:w-3 sm:h-3" />
+                      <span className="hidden sm:inline">Muted</span>
+                    </div>
+                  )}
+                  {!isVideoEnabled && (
+                    <div className="bg-gray-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
+                      <VideoOff className="w-2 h-2 sm:w-3 sm:h-3" />
+                      <span className="hidden sm:inline">Camera Off</span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* You indicator - Mobile Responsive */}
+                <div className="absolute top-1 sm:top-2 left-1 sm:left-2 bg-blue-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs">
+                  You
+                </div>
+                
+                {/* Current User Name - Bottom Right */}
+                <div className="absolute bottom-1 sm:bottom-2 right-1 sm:right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs sm:text-sm font-medium">
+                  {participantType}
+                </div>
+              </div>
+
+              {/* Other Participants */}
+              {participants.length > 0 ? (
+                participants.map((participant, index) => {
+                  // Get participant type from identity
+                  const participantType = participant.identity.split('_')[0] || 'unknown'
+                  const colors = {
+                    'caller': 'from-red-500 to-pink-500',
+                    'agent-a': 'from-blue-500 to-indigo-500',
+                    'agent-b': 'from-green-500 to-emerald-500',
+                    'agent_a': 'from-blue-500 to-indigo-500',
+                    'agent_b': 'from-green-500 to-emerald-500',
+                    'unknown': 'from-gray-500 to-gray-600'
+                  }
+                  const colorClass = colors[participantType as keyof typeof colors] || colors.unknown
+                  
+                  // Get real participant status
+                  const participantStatusData = participantStatus[participant.identity] || {
+                    muted: !participant.isMicrophoneEnabled,
+                    videoEnabled: participant.isCameraEnabled
+                  }
+                  const isParticipantMuted = participantStatusData.muted
+                  const isParticipantVideoOff = !participantStatusData.videoEnabled
+                  
+                  return (
+                    <div key={participant.identity} className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative">
+                      {!isParticipantVideoOff ? (
+                        <RemoteVideoTrack participant={participant} />
+                      ) : (
+                        <div className={`absolute inset-0 bg-gradient-to-br ${colorClass} flex items-center justify-center`}>
+                          <div className="text-center text-white">
+                            <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
+                              <span className="text-2xl font-bold">{participantType.charAt(0).toUpperCase()}</span>
+                            </div>
+                            <p className="text-sm font-medium">{participant.identity}</p>
+                            <p className="text-xs opacity-75">{participantType}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Status Indicators for other participants - Mobile Responsive */}
+                      <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 flex gap-1">
+                        {isParticipantMuted && (
+                          <div className="bg-red-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
+                            <MicOff className="w-2 h-2 sm:w-3 sm:h-3" />
+                            <span className="hidden sm:inline">Muted</span>
+                          </div>
+                        )}
+                        {isParticipantVideoOff && (
+                          <div className="bg-gray-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
+                            <VideoOff className="w-2 h-2 sm:w-3 sm:h-3" />
+                            <span className="hidden sm:inline">Camera Off</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Online indicator - Mobile Responsive */}
+                      <div className="absolute top-1 sm:top-2 right-1 sm:right-2 bg-green-500 text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-0.5 sm:gap-1">
+                        <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full"></div>
+                        <span className="hidden sm:inline">Online</span>
+                      </div>
+                      
+                      {/* Participant Name - Bottom Right */}
+                      <div className="absolute bottom-1 sm:bottom-2 right-1 sm:right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs sm:text-sm font-medium">
+                        {participant.identity}
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="bg-white rounded-lg shadow-lg overflow-hidden aspect-video relative border-2 border-dashed border-gray-300">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                      <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Waiting for others to join...</p>
+                      <p className="text-xs mt-1">You are: {participantType}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Google Meet Style Control Bar - Mobile Responsive */}
+        <div className="bg-white border-t border-gray-200 px-2 sm:px-6 py-2 sm:py-4">
+          <div className="flex justify-center items-center gap-2 sm:gap-4">
+            {/* Audio Button with Status - Mobile Responsive */}
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+              <button
+                onClick={toggleAudio}
+                className={`p-2 sm:p-3 rounded-full transition-all duration-200 ${
+                  isMuted 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+              <span className={`text-xs ${isMuted ? 'text-red-500' : 'text-gray-500'} hidden sm:block`}>
+                {isMuted ? 'Muted' : 'Unmuted'}
+              </span>
+            </div>
+            
+            {/* Video Button with Status - Mobile Responsive */}
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+              <button
+                onClick={toggleVideo}
+                className={`p-2 sm:p-3 rounded-full transition-all duration-200 ${
+                  !isVideoEnabled 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+                title={!isVideoEnabled ? 'Turn on camera' : 'Turn off camera'}
+              >
+                {!isVideoEnabled ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+              <span className={`text-xs ${!isVideoEnabled ? 'text-red-500' : 'text-gray-500'} hidden sm:block`}>
+                {!isVideoEnabled ? 'Camera Off' : 'Camera On'}
+              </span>
+            </div>
+
+            {/* Leave Button - More Prominent - Mobile Responsive */}
+            <button
+              onClick={() => {
+                if (confirm('Are you sure you want to leave the call?')) {
+                  handleLeaveCall()
+                }
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full transition-all duration-200 flex items-center gap-1 sm:gap-2 font-semibold shadow-lg hover:shadow-xl"
+              title="Leave call"
+            >
+              <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Leave</span>
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Google Meet Style Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-3xl w-full mx-4 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ArrowRightLeft className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Warm Transfer Initiated</h2>
+              <p className="text-gray-600">AI is preparing call summary for handoff</p>
+            </div>
+            
+            {callSummary && (
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold mb-4 text-gray-900">AI-Generated Call Summary:</h3>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                      <span className="text-white font-bold text-sm">AI</span>
+                    </div>
+                    <p className="text-gray-800 leading-relaxed">{callSummary.summary}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">Next Steps:</h3>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                  <span className="text-gray-700">Agent B should join the room</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                  <span className="text-gray-700">Explain the call summary to Agent B</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                  <span className="text-gray-700">Complete the transfer when ready</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={handleCompleteTransfer}
+                className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
+              >
+                <ArrowRightLeft className="w-5 h-5" />
+                Complete Transfer
+              </button>
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to leave the call?')) {
+                    handleLeaveCall()
+                  }
+                }}
+                className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2"
+              >
+                <PhoneOff className="w-5 h-5" />
+                Leave Call
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Status */}
+      {transferStatus && (
+        <div className="fixed top-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-40">
+          <p>{transferStatus}</p>
+        </div>
+      )}
     </div>
   )
 }
