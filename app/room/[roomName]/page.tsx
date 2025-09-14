@@ -265,6 +265,28 @@ export default function RoomPage() {
             // Ensure audio track is enabled
             if (audioTrackPublication.track.kind === 'audio') {
               console.log('Audio track is enabled and ready')
+              
+              // Force audio output by creating a temporary audio element
+              try {
+                const audioElement = document.createElement('audio')
+                audioElement.autoplay = true
+                audioElement.controls = false
+                audioElement.style.display = 'none'
+                document.body.appendChild(audioElement)
+                
+                // Attach the audio track to the element
+                audioTrackPublication.track.attach(audioElement)
+                console.log('Audio track attached to element for output')
+                
+                // Set volume to maximum
+                audioElement.volume = 1.0
+                console.log('Audio volume set to maximum')
+                
+                // Store reference for cleanup
+                (window as any).audioElement = audioElement
+              } catch (audioError) {
+                console.error('Error setting up audio output:', audioError)
+              }
             }
           } else {
             // If no audio track, try to enable microphone again
@@ -305,6 +327,13 @@ export default function RoomPage() {
     return () => {
       if (roomRef.current) {
         roomRef.current.disconnect()
+      }
+      
+      // Cleanup audio element
+      const audioElement = (window as any).audioElement
+      if (audioElement) {
+        audioElement.remove()
+        console.log('Audio element cleaned up')
       }
     }
   }, [roomName, participantType])
@@ -547,6 +576,41 @@ export default function RoomPage() {
           console.log('Attempting to unmute audio track...')
           audioTrackPublication.track.mute() // Toggle mute
           console.log('Audio track muted after toggle:', audioTrackPublication.track.isMuted)
+        }
+        
+        // Force audio output setup
+        try {
+          // Remove existing audio element if any
+          const existingAudio = (window as any).audioElement
+          if (existingAudio) {
+            existingAudio.remove()
+            console.log('Removed existing audio element')
+          }
+          
+          // Create new audio element for output
+          const audioElement = document.createElement('audio')
+          audioElement.autoplay = true
+          audioElement.controls = false
+          audioElement.style.display = 'none'
+          audioElement.volume = 1.0
+          document.body.appendChild(audioElement)
+          
+          // Attach audio track
+          audioTrackPublication.track.attach(audioElement)
+          console.log('Audio track attached to element for output')
+          
+          // Store reference
+          (window as any).audioElement = audioElement
+          
+          // Test audio playback
+          audioElement.play().then(() => {
+            console.log('Audio playback started successfully')
+          }).catch((playError) => {
+            console.error('Audio playback failed:', playError)
+          })
+          
+        } catch (audioError) {
+          console.error('Error setting up audio output:', audioError)
         }
       } else {
         console.log('No audio track publications found, trying to enable microphone...')
