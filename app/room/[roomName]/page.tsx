@@ -401,7 +401,8 @@ export default function RoomPage() {
       console.error('Transfer failed:', error)
       // Use fallback summary if API fails
       const fallbackSummary = {
-        summary: `Call Summary: Customer inquiry about ${participantType} services. Duration: ${conversationHistory.length} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B.`
+        summary: `Call Summary: Customer inquiry about ${participantType} services. Duration: ${conversationHistory.length} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B.`,
+        status: 'fallback'
       }
       setCallSummary(fallbackSummary)
       setShowTransferModal(true)

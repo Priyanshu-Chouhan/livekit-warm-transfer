@@ -321,6 +321,43 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
         print(f"Error generating summary: {str(e)}")
         return f"Error generating summary: {str(e)}"
 
+@app.get("/api/test-openai")
+async def test_openai():
+    """Test OpenAI API connection"""
+    try:
+        print("Testing OpenAI API...")
+        
+        response = await openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Say 'Hello, OpenAI is working!' in one sentence."}
+            ],
+            max_tokens=50,
+            temperature=0.7
+        )
+        
+        result = response.choices[0].message.content.strip()
+        print(f"OpenAI test successful: {result}")
+        
+        return {
+            "status": "success",
+            "message": "OpenAI API is working",
+            "response": result,
+            "model": "gpt-3.5-turbo"
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"OpenAI test failed: {error_msg}")
+        
+        return {
+            "status": "error",
+            "message": "OpenAI API failed",
+            "error": error_msg,
+            "model": "gpt-3.5-turbo"
+        }
+
 @app.get("/api/rooms")
 async def list_rooms():
     """List all active rooms"""
