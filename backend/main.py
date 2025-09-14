@@ -23,7 +23,7 @@ load_dotenv()
 
 app = FastAPI(title="LiveKit Warm Transfer API")
 
-# CORS middleware - Allow mobile and local network access
+# CORS middleware - Allow mobile, local network, and production access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -31,6 +31,8 @@ app.add_middleware(
         "http://localhost:3001", 
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        # Production frontend URL
+        "https://livekit-warm-transfer-frontend.onrender.com",
         # Allow all local network IPs for mobile testing
         "http://192.168.*.*:3000",
         "http://192.168.*.*:3001",

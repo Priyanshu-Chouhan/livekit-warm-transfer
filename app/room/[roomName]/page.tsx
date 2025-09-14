@@ -106,7 +106,9 @@ export default function RoomPage() {
           throw new Error('Camera and microphone access is required. Please allow access and refresh the page.')
         }
         // Get room token from backend
-        const API_URL = process.env.NEXT_PUBLIC_API_URL_LOCAL || process.env.NEXT_PUBLIC_API_URL_LIVE
+        const API_URL = process.env.NEXT_PUBLIC_API_URL_LOCAL || 
+          process.env.NEXT_PUBLIC_API_URL_LIVE || 
+          'https://livekit-warm-transfer-backend.onrender.com'
         
         const response = await fetch(`${API_URL}/api/rooms/create`, {
           method: 'POST',
