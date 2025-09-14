@@ -540,7 +540,7 @@ export default function RoomPage() {
         console.log('Audio track:', audioTrackPublication.track)
         console.log('Audio track muted:', audioTrackPublication.track?.isMuted)
         console.log('Audio track kind:', audioTrackPublication.track?.kind)
-        console.log('Audio track enabled:', audioTrackPublication.track?.enabled)
+        console.log('Audio track enabled:', !audioTrackPublication.track?.isMuted)
         
         // Try to unmute if muted
         if (audioTrackPublication.track?.isMuted) {
