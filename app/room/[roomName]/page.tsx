@@ -254,7 +254,7 @@ export default function RoomPage() {
           // Force audio track to be unmuted and ensure it's published
           const audioTrackPublication = Array.from(newRoom.localParticipant.audioTrackPublications.values())[0]
           if (audioTrackPublication && audioTrackPublication.track) {
-            audioTrackPublication.track.muted = false
+            audioTrackPublication.track.mute()
             console.log('Audio track unmuted')
           } else {
             // If no audio track, try to enable microphone again
@@ -451,7 +451,7 @@ export default function RoomPage() {
         // Force audio track to be unmuted and ensure it's published
         const audioTrackPublication = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())[0]
         if (audioTrackPublication && audioTrackPublication.track) {
-          audioTrackPublication.track.muted = false
+          audioTrackPublication.track.mute()
           console.log('Audio track unmuted')
         } else {
           // If no audio track, try to enable microphone again
@@ -504,8 +504,8 @@ export default function RoomPage() {
       const audioTrackPublication = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())[0]
       if (audioTrackPublication && audioTrackPublication.track) {
         console.log('Audio track found:', audioTrackPublication.track)
-        console.log('Audio track muted:', audioTrackPublication.track.muted)
-        console.log('Audio track enabled:', audioTrackPublication.track.enabled)
+        console.log('Audio track muted:', audioTrackPublication.track.isMuted)
+        console.log('Audio track kind:', audioTrackPublication.track.kind)
       } else {
         console.log('No audio track found')
       }
