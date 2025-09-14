@@ -54,14 +54,28 @@ LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Validate required environment variables
+if not LIVEKIT_URL:
+    raise ValueError("LIVEKIT_URL environment variable is required")
+if not LIVEKIT_API_KEY:
+    raise ValueError("LIVEKIT_API_KEY environment variable is required")
+if not LIVEKIT_API_SECRET:
+    raise ValueError("LIVEKIT_API_SECRET environment variable is required")
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY not found, Gemini API will not work")
+if not OPENAI_API_KEY:
+    print("WARNING: OPENAI_API_KEY not found, OpenAI API will not work")
+
 # Initialize LiveKit client (will be created in async context)
 livekit_client = None
 
 # Initialize OpenAI client
-openai_client.api_key = OPENAI_API_KEY
+if OPENAI_API_KEY:
+    openai_client.api_key = OPENAI_API_KEY
 
 # Initialize Gemini client
-genai.configure(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # In-memory storage for demo (replace with database in production)
 active_rooms: Dict[str, Dict] = {}
@@ -302,35 +316,66 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
         
         print(f"Generating summary for room {room_name} with {len(conversation_history)} messages")
         
-        # Use Gemini as primary API
-        try:
-            # Use Gemini API (Primary)
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt)
-            summary = response.text.strip()
-            print(f"Generated summary with Gemini (Primary): {summary}")
-            
-        except Exception as gemini_error:
-            print(f"Gemini failed: {str(gemini_error)}, trying OpenAI fallback...")
-            
-            # Fallback to OpenAI only if Gemini fails
+        # Use Gemini as primary API (if API key is available)
+        if GEMINI_API_KEY:
             try:
-                response = await openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=150,
-                    temperature=0.7
-                )
+                # Use Gemini API (Primary)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                response = model.generate_content(prompt)
+                summary = response.text.strip()
+                print(f"Generated summary with Gemini (Primary): {summary}")
                 
-                summary = response.choices[0].message.content.strip()
-                print(f"Generated summary with OpenAI (Fallback): {summary}")
+            except Exception as gemini_error:
+                print(f"Gemini failed: {str(gemini_error)}, trying OpenAI fallback...")
                 
-            except Exception as openai_error:
-                print(f"Both APIs failed. Gemini: {str(gemini_error)}, OpenAI: {str(openai_error)}")
-                # Use hardcoded fallback
+                # Fallback to OpenAI only if Gemini fails
+                if OPENAI_API_KEY:
+                    try:
+                        response = await openai_client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=[
+                                {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            max_tokens=150,
+                            temperature=0.7
+                        )
+                        
+                        summary = response.choices[0].message.content.strip()
+                        print(f"Generated summary with OpenAI (Fallback): {summary}")
+                        
+                    except Exception as openai_error:
+                        print(f"Both APIs failed. Gemini: {str(gemini_error)}, OpenAI: {str(openai_error)}")
+                        # Use hardcoded fallback
+                        summary = f"Call Summary: Customer inquiry about {participant_type} services. Duration: {len(conversation_history)} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B."
+                        print(f"Using hardcoded fallback summary: {summary}")
+                else:
+                    print("No OpenAI API key available, using hardcoded fallback")
+                    summary = f"Call Summary: Customer inquiry about {participant_type} services. Duration: {len(conversation_history)} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B."
+                    print(f"Using hardcoded fallback summary: {summary}")
+        else:
+            print("No Gemini API key available, trying OpenAI...")
+            if OPENAI_API_KEY:
+                try:
+                    response = await openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=150,
+                        temperature=0.7
+                    )
+                    
+                    summary = response.choices[0].message.content.strip()
+                    print(f"Generated summary with OpenAI: {summary}")
+                    
+                except Exception as openai_error:
+                    print(f"OpenAI failed: {str(openai_error)}, using hardcoded fallback")
+                    summary = f"Call Summary: Customer inquiry about {participant_type} services. Duration: {len(conversation_history)} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B."
+                    print(f"Using hardcoded fallback summary: {summary}")
+            else:
+                print("No API keys available, using hardcoded fallback")
                 summary = f"Call Summary: Customer inquiry about {participant_type} services. Duration: {len(conversation_history)} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B."
                 print(f"Using hardcoded fallback summary: {summary}")
         
@@ -352,6 +397,14 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
 async def test_gemini():
     """Test Gemini API connection"""
     try:
+        if not GEMINI_API_KEY:
+            return {
+                "status": "error",
+                "message": "GEMINI_API_KEY environment variable not found",
+                "error": "API key not configured",
+                "model": "gemini-1.5-flash"
+            }
+        
         print("Testing Gemini API...")
         
         model = genai.GenerativeModel('gemini-1.5-flash')

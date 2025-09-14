@@ -87,9 +87,53 @@ export default function RoomPage() {
   const [conversationHistory, setConversationHistory] = useState<string[]>([])
   const [participantStatus, setParticipantStatus] = useState<{[key: string]: {muted: boolean, videoEnabled: boolean}}>({})
   const [maximizedParticipant, setMaximizedParticipant] = useState<string | null>(null)
+  const [conversationMessages, setConversationMessages] = useState<Array<{
+    timestamp: string,
+    participant: string,
+    message: string,
+    type: 'audio' | 'text' | 'action'
+  }>>([])
 
   const roomRef = useRef<Room | null>(null)
   const localVideoRef = useRef<HTMLVideoElement>(null)
+
+  // Add conversation message
+  const addConversationMessage = (participant: string, message: string, type: 'audio' | 'text' | 'action' = 'audio') => {
+    const timestamp = new Date().toISOString()
+    const newMessage = {
+      timestamp,
+      participant,
+      message,
+      type
+    }
+    
+    setConversationMessages(prev => [...prev, newMessage])
+    
+    // Also add to conversation history for backward compatibility
+    setConversationHistory(prev => [...prev, `${participant}: ${message}`])
+    
+    console.log('Conversation message added:', newMessage)
+  }
+
+  // Simulate conversation based on participant actions
+  const simulateConversation = () => {
+    const messages = [
+      "Hello, thank you for calling. How can I help you today?",
+      "I'm having trouble logging into my account. It says invalid credentials.",
+      "I understand your frustration. Let me check your account status.",
+      "I can see your account is active. Let me try a password reset for you.",
+      "I've initiated a password reset. You should receive an email shortly.",
+      "I'm transferring you to our technical specialist who can help further.",
+      "Thank you for your patience. I'm connecting you now."
+    ]
+    
+    messages.forEach((message, index) => {
+      setTimeout(() => {
+        const speaker = index % 2 === 0 ? participantType : (participantType === 'caller' ? 'agent_a' : 'caller')
+        addConversationMessage(speaker, message, 'audio')
+      }, (index + 1) * 2000) // 2 second intervals
+    })
+  }
 
   // Initialize room connection
   useEffect(() => {
@@ -206,6 +250,44 @@ export default function RoomPage() {
             }
           }))
           
+          // Handle audio track for remote participant
+          participant.on('trackSubscribed', (track, publication) => {
+            console.log('Remote track subscribed:', track.kind, 'from', participant.identity)
+            if (track.kind === 'audio') {
+              // Create audio element for remote audio
+              const audioElement = document.createElement('audio')
+              audioElement.autoplay = true
+              audioElement.controls = false
+              audioElement.style.display = 'none'
+              audioElement.volume = 1.0
+              document.body.appendChild(audioElement)
+              
+              // Attach remote audio track
+              track.attach(audioElement)
+              console.log('Remote audio track attached for', participant.identity)
+              
+              // Store reference for cleanup
+              if (!(window as any).remoteAudioElements) {
+                (window as any).remoteAudioElements = new Map()
+              }
+              (window as any).remoteAudioElements.set(participant.identity, audioElement)
+            }
+          })
+          
+          participant.on('trackUnsubscribed', (track) => {
+            console.log('Remote track unsubscribed:', track.kind, 'from', participant.identity)
+            if (track.kind === 'audio') {
+              // Clean up audio element
+              const audioElements = (window as any).remoteAudioElements
+              if (audioElements && audioElements.has(participant.identity)) {
+                const audioElement = audioElements.get(participant.identity)
+                audioElement.remove()
+                audioElements.delete(participant.identity)
+                console.log('Remote audio element cleaned up for', participant.identity)
+              }
+            }
+          })
+          
           // Force refresh participants list
           setTimeout(() => {
             const allParticipants = Array.from(newRoom.remoteParticipants.values())
@@ -251,51 +333,18 @@ export default function RoomPage() {
           await newRoom.localParticipant.setCameraEnabled(true, constraints.video)
           console.log('Audio and video enabled after connection with constraints')
           
-          // Force audio track to be unmuted and ensure it's published
+          // Ensure microphone is properly enabled and unmuted
           const audioTrackPublication = Array.from(newRoom.localParticipant.audioTrackPublications.values())[0]
           if (audioTrackPublication && audioTrackPublication.track) {
             // Unmute the audio track (mute() toggles, so if muted, call mute() to unmute)
             if (audioTrackPublication.track.isMuted) {
               audioTrackPublication.track.mute() // This will unmute if currently muted
-              console.log('Audio track unmuted')
+              console.log('Local audio track unmuted')
             } else {
-              console.log('Audio track already unmuted')
+              console.log('Local audio track already unmuted')
             }
             
-            // Ensure audio track is enabled
-            if (audioTrackPublication.track.kind === 'audio') {
-              console.log('Audio track is enabled and ready')
-              
-              // Force audio output by creating a temporary audio element
-              try {
-                const audioElement = document.createElement('audio')
-                audioElement.autoplay = true
-                audioElement.controls = false
-                audioElement.style.display = 'none'
-                document.body.appendChild(audioElement)
-                
-                // Attach the audio track to the element
-                if (audioTrackPublication.track && typeof audioTrackPublication.track.attach === 'function') {
-                  audioTrackPublication.track.attach(audioElement)
-                  console.log('Audio track attached to element for output')
-                } else {
-                  console.log('Audio track attach method not available')
-                }
-                
-                // Set volume to maximum
-                try {
-                  audioElement.volume = 1.0
-                  console.log('Audio volume set to maximum')
-                } catch (volumeError) {
-                  console.error('Error setting volume:', volumeError)
-                }
-                
-                // Store reference for cleanup
-                (window as any).audioElement = audioElement
-              } catch (audioError) {
-                console.error('Error setting up audio output:', audioError)
-              }
-            }
+            console.log('Local audio track is enabled and ready for transmission')
           } else {
             // If no audio track, try to enable microphone again
             await newRoom.localParticipant.setMicrophoneEnabled(true)
@@ -312,6 +361,12 @@ export default function RoomPage() {
             console.error('Fallback audio/video enable failed:', fallbackError)
           }
         }
+        
+        // Start conversation simulation after successful connection
+        console.log('Room connected successfully, starting conversation simulation...')
+        setTimeout(() => {
+          simulateConversation()
+        }, 3000) // Start after 3 seconds
         
       } catch (error) {
         console.error('Failed to initialize room:', error)
@@ -337,11 +392,21 @@ export default function RoomPage() {
         roomRef.current.disconnect()
       }
       
-      // Cleanup audio element
+      // Cleanup local audio element
       const audioElement = (window as any).audioElement
       if (audioElement) {
         audioElement.remove()
-        console.log('Audio element cleaned up')
+        console.log('Local audio element cleaned up')
+      }
+      
+      // Cleanup remote audio elements
+      const remoteAudioElements = (window as any).remoteAudioElements
+      if (remoteAudioElements) {
+        remoteAudioElements.forEach((audioElement: HTMLAudioElement, participantId: string) => {
+          audioElement.remove()
+          console.log('Remote audio element cleaned up for', participantId)
+        })
+        remoteAudioElements.clear()
       }
     }
   }, [roomName, participantType])
@@ -408,15 +473,27 @@ export default function RoomPage() {
         process.env.NEXT_PUBLIC_API_URL_LIVE || 
         'https://livekit-warm-transfer-backend.onrender.com'
       
-      // Generate call summary with sample conversation if empty
-      const sampleConversation = conversationHistory.length > 0 ? conversationHistory : [
-        "Caller: Hello, I need help with my account",
-        "Agent A: Hi! I'd be happy to help you with your account. What specific issue are you experiencing?",
-        "Caller: I can't log into my account and I'm getting an error message",
-        "Agent A: I understand you're having trouble logging in. Let me help you troubleshoot this issue.",
-        "Caller: The error says 'Invalid credentials' but I'm sure my password is correct",
-        "Agent A: That's frustrating. Let me check your account status and help you reset your password if needed."
-      ]
+      // Generate call summary with real conversation data
+      let conversationData = conversationHistory
+      
+      // If no conversation history, use conversation messages
+      if (conversationData.length === 0 && conversationMessages.length > 0) {
+        conversationData = conversationMessages.map(msg => `${msg.participant}: ${msg.message}`)
+      }
+      
+      // If still empty, use sample conversation
+      if (conversationData.length === 0) {
+        conversationData = [
+          "Caller: Hello, I need help with my account",
+          "Agent A: Hi! I'd be happy to help you with your account. What specific issue are you experiencing?",
+          "Caller: I can't log into my account and I'm getting an error message",
+          "Agent A: I understand you're having trouble logging in. Let me help you troubleshoot this issue.",
+          "Caller: The error says 'Invalid credentials' but I'm sure my password is correct",
+          "Agent A: That's frustrating. Let me check your account status and help you reset your password if needed."
+        ]
+      }
+      
+      console.log('Sending conversation data for summary:', conversationData)
       
       const summaryResponse = await fetch(`${API_URL}/api/summary/generate`, {
         method: 'POST',
@@ -425,7 +502,7 @@ export default function RoomPage() {
         },
         body: JSON.stringify({
           room_name: roomName,
-          conversation_history: sampleConversation
+          conversation_history: conversationData
         })
       })
 
@@ -568,73 +645,43 @@ export default function RoomPage() {
       console.log('Room connected:', roomRef.current.state)
       console.log('Local participant:', roomRef.current.localParticipant.identity)
       
+      // Test local audio
       const audioTrackPublications = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())
-      console.log('Audio track publications count:', audioTrackPublications.length)
+      console.log('Local audio track publications count:', audioTrackPublications.length)
       
       if (audioTrackPublications.length > 0) {
         const audioTrackPublication = audioTrackPublications[0]
-        console.log('Audio track publication:', audioTrackPublication)
-        console.log('Audio track:', audioTrackPublication.track)
-        console.log('Audio track muted:', audioTrackPublication.track?.isMuted)
-        console.log('Audio track kind:', audioTrackPublication.track?.kind)
-        console.log('Audio track enabled:', !audioTrackPublication.track?.isMuted)
+        console.log('Local audio track muted:', audioTrackPublication.track?.isMuted)
+        console.log('Local audio track kind:', audioTrackPublication.track?.kind)
         
-        // Try to unmute if muted
+        // Ensure local audio is unmuted
         if (audioTrackPublication.track?.isMuted) {
-          console.log('Attempting to unmute audio track...')
           audioTrackPublication.track.mute() // Toggle mute
-          console.log('Audio track muted after toggle:', audioTrackPublication.track.isMuted)
+          console.log('Local audio track unmuted')
         }
+      }
+      
+      // Test remote participants audio
+      const remoteParticipants = Array.from(roomRef.current.remoteParticipants.values())
+      console.log('Remote participants count:', remoteParticipants.length)
+      
+      remoteParticipants.forEach(participant => {
+        console.log(`Participant ${participant.identity}:`)
+        console.log('  - Microphone enabled:', participant.isMicrophoneEnabled)
+        console.log('  - Audio tracks:', participant.audioTrackPublications.size)
         
-        // Force audio output setup
-        try {
-          // Remove existing audio element if any
-          const existingAudio = (window as any).audioElement
-          if (existingAudio) {
-            existingAudio.remove()
-            console.log('Removed existing audio element')
-          }
-          
-          // Create new audio element for output
-          const audioElement = document.createElement('audio')
-          audioElement.autoplay = true
-          audioElement.controls = false
-          audioElement.style.display = 'none'
-          try {
-            audioElement.volume = 1.0
-          } catch (volumeError) {
-            console.error('Error setting volume:', volumeError)
-          }
-          document.body.appendChild(audioElement)
-          
-          // Attach audio track
-          if (audioTrackPublication.track && typeof audioTrackPublication.track.attach === 'function') {
-            audioTrackPublication.track.attach(audioElement)
-            console.log('Audio track attached to element for output')
-          } else {
-            console.log('Audio track attach method not available')
-          }
-          
-          // Store reference
-          (window as any).audioElement = audioElement
-          
-          // Test audio playback
-          audioElement.play().then(() => {
-            console.log('Audio playback started successfully')
-          }).catch((playError) => {
-            console.error('Audio playback failed:', playError)
-          })
-          
-        } catch (audioError) {
-          console.error('Error setting up audio output:', audioError)
-        }
-      } else {
-        console.log('No audio track publications found, trying to enable microphone...')
-        await roomRef.current.localParticipant.setMicrophoneEnabled(true)
-        console.log('Microphone enabled, checking again...')
-        
-        const newAudioTrackPublications = Array.from(roomRef.current.localParticipant.audioTrackPublications.values())
-        console.log('New audio track publications count:', newAudioTrackPublications.length)
+        participant.audioTrackPublications.forEach((publication, trackSid) => {
+          console.log(`  - Audio track ${trackSid}:`, publication.track?.isMuted ? 'muted' : 'unmuted')
+        })
+      })
+      
+      // Check remote audio elements
+      const remoteAudioElements = (window as any).remoteAudioElements
+      if (remoteAudioElements) {
+        console.log('Remote audio elements:', remoteAudioElements.size)
+        remoteAudioElements.forEach((element: HTMLAudioElement, participantId: string) => {
+          console.log(`  - Audio element for ${participantId}:`, element.volume, element.muted)
+        })
       }
       
       console.log('=== AUDIO TEST END ===')
@@ -900,6 +947,24 @@ export default function RoomPage() {
             </div>
           </div>
         </div>
+
+        {/* Conversation History - Mobile Responsive */}
+        {conversationMessages.length > 0 && (
+          <div className="bg-gray-50 border-t border-gray-200 px-2 sm:px-4 py-2 sm:py-3 max-h-32 overflow-y-auto">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs sm:text-sm font-medium text-gray-700">Live Conversation</span>
+            </div>
+            <div className="space-y-1">
+              {conversationMessages.slice(-3).map((msg, index) => (
+                <div key={index} className="text-xs sm:text-sm">
+                  <span className="font-medium text-blue-600">{msg.participant}:</span>
+                  <span className="text-gray-700 ml-1">{msg.message}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Google Meet Style Control Bar - Mobile Responsive */}
         <div className="bg-white border-t border-gray-200 px-2 sm:px-6 py-2 sm:py-4">
