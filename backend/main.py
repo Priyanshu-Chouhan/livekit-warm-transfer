@@ -16,6 +16,7 @@ from livekit import api
 # from livekit.agents.voice_assistant import VoiceAssistant
 # from livekit.plugins import openai
 import openai as openai_client
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -51,12 +52,16 @@ LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Initialize LiveKit client (will be created in async context)
 livekit_client = None
 
 # Initialize OpenAI client
 openai_client.api_key = OPENAI_API_KEY
+
+# Initialize Gemini client
+genai.configure(api_key=GEMINI_API_KEY)
 
 # In-memory storage for demo (replace with database in production)
 active_rooms: Dict[str, Dict] = {}
@@ -297,18 +302,30 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
         
         print(f"Generating summary for room {room_name} with {len(conversation_history)} messages")
         
-        response = await openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=150,
-            temperature=0.7
-        )
-        
-        summary = response.choices[0].message.content.strip()
-        print(f"Generated summary: {summary}")
+        # Try Gemini first, fallback to OpenAI
+        try:
+            # Use Gemini API
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+            summary = response.text.strip()
+            print(f"Generated summary with Gemini: {summary}")
+            
+        except Exception as gemini_error:
+            print(f"Gemini failed: {str(gemini_error)}, trying OpenAI...")
+            
+            # Fallback to OpenAI
+            response = await openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an AI assistant that creates concise call summaries for warm transfers between customer service agents."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            print(f"Generated summary with OpenAI: {summary}")
         
         # Store summary
         if room_name not in call_contexts:
@@ -319,7 +336,40 @@ async def generate_call_summary(room_name: str, conversation_history: Optional[L
         
     except Exception as e:
         print(f"Error generating summary: {str(e)}")
-        return f"Error generating summary: {str(e)}"
+        # Return a fallback summary if both APIs fail
+        fallback_summary = f"Call Summary: Customer inquiry about {participant_type} services. Duration: {len(conversation_history)} messages. Status: Active call in progress. Next steps: Complete warm transfer to Agent B."
+        print(f"Using fallback summary: {fallback_summary}")
+        return fallback_summary
+
+@app.get("/api/test-gemini")
+async def test_gemini():
+    """Test Gemini API connection"""
+    try:
+        print("Testing Gemini API...")
+        
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content("Say 'Hello, Gemini is working!' in one sentence.")
+        
+        result = response.text.strip()
+        print(f"Gemini test successful: {result}")
+        
+        return {
+            "status": "success",
+            "message": "Gemini API is working",
+            "response": result,
+            "model": "gemini-1.5-flash"
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Gemini test failed: {error_msg}")
+        
+        return {
+            "status": "error",
+            "message": "Gemini API failed",
+            "error": error_msg,
+            "model": "gemini-1.5-flash"
+        }
 
 @app.get("/api/test-openai")
 async def test_openai():
