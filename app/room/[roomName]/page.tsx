@@ -292,6 +292,11 @@ export default function RoomPage() {
     try {
       setTransferStatus('Initiating transfer...')
       
+      // Get API URL
+      const API_URL = process.env.NEXT_PUBLIC_API_URL_LOCAL || 
+        process.env.NEXT_PUBLIC_API_URL_LIVE || 
+        'https://livekit-warm-transfer-backend.onrender.com'
+      
       // Generate call summary
         const summaryResponse = await fetch(`${API_URL}/api/summary/generate`, {
         method: 'POST',
@@ -320,6 +325,11 @@ export default function RoomPage() {
     if (participantType !== 'agent_a') return
 
     try {
+      // Get API URL
+      const API_URL = process.env.NEXT_PUBLIC_API_URL_LOCAL || 
+        process.env.NEXT_PUBLIC_API_URL_LIVE || 
+        'https://livekit-warm-transfer-backend.onrender.com'
+      
       // Leave the room
       if (roomRef.current) {
         await roomRef.current.disconnect()
@@ -390,6 +400,11 @@ export default function RoomPage() {
   // Leave call and redirect to home
   const handleLeaveCall = async () => {
     try {
+      // Get API URL
+      const API_URL = process.env.NEXT_PUBLIC_API_URL_LOCAL || 
+        process.env.NEXT_PUBLIC_API_URL_LIVE || 
+        'https://livekit-warm-transfer-backend.onrender.com'
+      
       if (roomRef.current) {
         await roomRef.current.disconnect()
       }
